@@ -9,7 +9,6 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN pip install litellm[proxy]
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python3", "-m", "src.discord.app"]

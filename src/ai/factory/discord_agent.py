@@ -19,7 +19,7 @@ If you don't know the answer to a question, you can say you don't know or ask fo
 """
 
 
-def build_discord_agent() -> Agent:
+def build_discord_agent(model: str) -> Agent:
     """
     Builds a Discord management agent that can be used to manage Discord servers.
     """
@@ -27,7 +27,7 @@ def build_discord_agent() -> Agent:
         name="DiscordAgent",
         description="An agent that serves as the Discord management agent. Only discord stats, and possibility to create text channels.",
         conversation=Conversation(id='0'),
-        model='kimi-k2.5',
+        model=model,
         system_prompt=create_base_prompt() + SYSTEM_PROMPT,
         tools=[get_server_info, list_members, list_channels, list_roles, get_server_stats, get_member_info, get_channel_info, create_text_channel]
     )

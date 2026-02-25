@@ -14,7 +14,7 @@ Tool call policy:
 ALWAYS PROVIDE SOURCES FOR THE INFORMATION YOU RETURN, EVEN IF YOU KNOW THE ANSWER WITHOUT TOOLS. THIS IS VERY IMPORTANT FOR THE USER TO VERIFY THE INFORMATION.
 """
 
-def build_websearch_agent() -> Agent:
+def build_websearch_agent(model: str) -> Agent:
     """
     Builds a web search agent that can be used to search the web.
     """
@@ -23,7 +23,7 @@ def build_websearch_agent() -> Agent:
         description="An agent that serves as the web search agent.",
         system_prompt=create_base_prompt() + SYSTEM_PROMPT,
         conversation=Conversation(id='0'),
-        model='kimi-k2.5',
+        model=model,
         tools=[web_search, search_scraped_website],
         max_iterations=15
     )
