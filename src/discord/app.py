@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-from agentic_framework.core.stream_events import FinalAnswerEvent, ToolCallStartEvent, ToolResultEvent, DelegationEvent
+from agentic_framework.core.stream_events import TextDeltaEvent, FinalAnswerEvent, ToolCallStartEvent, ToolResultEvent, DelegationEvent
 from ..ai.factory.swarm import answer_discord_question
 from ..ai import discord_tools
 
@@ -119,18 +119,22 @@ async def on_message(message: discord.Message):
                 answer = event.answer[:1900]  # zabezpieczenie przed 2k limitem
             
             elif isinstance(event, ToolCallStartEvent):
+                answer = f"🔧 Używam: {event.tool_name} ..."
                 if event.tool_name.startswith("delegate_"):
                     answer = '➡️ Przygotowuje narzędzia...'
-                answer = f"🔧 Używam: {event.tool_name} ..."
-            
+                    
             elif isinstance(event, ToolResultEvent):
                 answer = f"✅ Sprawdzam wyniki z: {event.tool_name} ..."
             
             elif isinstance(event, DelegationEvent):
                 answer = f"➡️ Sprawdzam możliwości ..."
+
+            elif isinstance(event, TextDeltaEvent):
+                print(event.delta, end="")
+                continue
             
 
-
+            print(f"Event: {type(event).__name__}, answer so far: {answer}")
 
             if not answer:
                 answer = 'Czekaj myślę...'

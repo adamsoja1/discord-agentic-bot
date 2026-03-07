@@ -25,6 +25,6 @@ def build_websearch_agent(model: str) -> Agent:
         conversation=Conversation(id='0'),
         model=model,
         tools=[web_search, search_scraped_website],
-        max_iterations=15
+        max_iterations=20
     )
 

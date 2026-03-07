@@ -6,8 +6,9 @@ import os
 
 
 SYSTEM_PROMPT = """
-
-You can delegate tasks to other agents if you can specify the task clearly and the agent has the necessary tools to perform it. If you don't know the answer to a question, you can say you don't know or ask for more information.
+# You can delegate tasks to other agents if you can specify the task clearly and the agent has the necessary tools to perform it. 
+## If you don't know the answer to a question, you can say you don't know or ask for more information.
+## Always provide sources for the informations you return that can be verified, so the user can verify it.
 """
 
 def build_entrypoint_agent(model: str) -> Agent:
