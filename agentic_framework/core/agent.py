@@ -285,20 +285,6 @@ class Agent:
                 return parsed, clean
             raise
 
-    @staticmethod
-    def _extract_text_from_delta(delta: Any) -> str:
-        """Extract only the final answer text from a delta, ignoring reasoning_content.
-
-        Reasoning models (deepseek-r1, qwq, etc.) stream thinking tokens via
-        ``delta.reasoning_content``.  We deliberately skip that field so that
-        ``assistant_text`` — and ultimately the conversation history — contains
-        only the actual response, not the internal chain-of-thought.
-        """
-        content = delta.content
-        if not content:
-            return ""
-        return content
-
     async def stream(self, user_message: str) -> AsyncGenerator[StreamEvent, None]:
         if self.client is None:
             yield ErrorEvent(agent_name=self.name, error="No OpenAI client configured.")
@@ -311,102 +297,64 @@ class Agent:
         assistant_text = ""
 
         for iteration in range(self.max_iterations):
-            openai_tools = self._build_openai_tools()
-            tool_choice: Any = "auto" if openai_tools else "none"
-
             if self.max_iterations_reached(iteration):
                 self.modify_prompt_on_max_iterations()
-                openai_tools = []
-                tool_choice = "none"
 
             self._rebuild_system_prompt()
             messages = self.conversation.get_messages()
+            response_tools = self._build_responses_tools()
+            tool_choice = "auto"
+            if self.max_iterations_reached(iteration):
+                tool_choice = "none"
+
+            stream_kwargs: dict[str, Any] = {
+                "model": self.model,
+                "input": self._to_responses_input(messages),
+                "instructions": self.conversation.system_prompt,
+                "stream": True,
+            }
+            if response_tools:
+                stream_kwargs["tools"] = response_tools
+                stream_kwargs["tool_choice"] = tool_choice
+                stream_kwargs["reasoning"] = {"effort": self.reasoning_effort}
 
             try:
-                if self.web_search:
-                    response_stream = await self.client.responses.create(
-                        model=self.model,
-                        input=self._to_responses_input(messages),
-                        tools=self._build_responses_tools(),
-                        # Keep the built-in web search available even when the
-                        # agent has no framework-defined function tools.
-                        tool_choice="none" if self.max_iterations_reached(iteration) else "auto",
-                        reasoning={"effort": self.reasoning_effort},
-                        stream=True,
-                    )
-                else:
-                    stream_kwargs: dict[str, Any] = {
-                        "model": self.model,
-                        "messages": messages,
-                        "stream": True,
-                    }
-                    if openai_tools:
-                        stream_kwargs["tools"] = openai_tools
-                        stream_kwargs["tool_choice"] = tool_choice
-                        stream_kwargs["reasoning_effort"] = self.reasoning_effort
-                    response_stream = await self.client.chat.completions.create(**stream_kwargs)
+                response_stream = await self.client.responses.create(**stream_kwargs)
             except Exception as exc:
                 logger.error("Agent '%s' API error on iteration %d: %s", self.name, iteration, exc)
                 yield ErrorEvent(agent_name=self.name, error=str(exc))
                 break
 
             assistant_text = ""
-            reasoning_text = ""
-            tool_calls_acc: dict[int, dict[str, Any]] = {}
-            finish_reason: str | None = None
+            tool_calls_acc: dict[str, dict[str, Any]] = {}
 
             async for chunk in response_stream:
-                if self.web_search:
-                    event_type = getattr(chunk, "type", "")
-                    if event_type == "response.output_text.delta":
-                        text_chunk = getattr(chunk, "delta", "")
-                        if text_chunk:
-                            assistant_text += text_chunk
-                            yield TextDeltaEvent(agent_name=self.name, delta=text_chunk)
-                    elif event_type == "response.output_item.done":
-                        item = getattr(chunk, "item", None)
-                        if item is not None and getattr(item, "type", None) == "function_call":
-                            idx = getattr(chunk, "output_index", len(tool_calls_acc))
-                            tool_calls_acc[idx] = {
-                                "id": getattr(item, "call_id", ""),
-                                "name": getattr(item, "name", ""),
-                                "arguments": getattr(item, "arguments", "{}"),
-                            }
-                    continue
-                choice = chunk.choices[0] if chunk.choices else None
-                if choice is None:
-                    continue
-
-                delta = choice.delta
-
-                raw_reasoning = getattr(delta, "reasoning_content", None)
-                if raw_reasoning:
-                    reasoning_text += raw_reasoning
-
-                text_chunk = self._extract_text_from_delta(delta)
+                event_type = getattr(chunk, "type", "")
+                text_chunk = getattr(chunk, "delta", "") if event_type == "response.output_text.delta" else ""
                 if text_chunk:
                     assistant_text += text_chunk
                     yield TextDeltaEvent(agent_name=self.name, delta=text_chunk)
 
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        idx = tc.index
-                        if idx not in tool_calls_acc:
-                            tool_calls_acc[idx] = {"id": "", "name": "", "arguments": ""}
-
-                        acc = tool_calls_acc[idx]
-
-                        if tc.id:
-                            acc["id"] = tc.id
-
-                        if tc.function:
-                            if tc.function.name and not acc["name"]:
-                                acc["name"] = tc.function.name
-                            if tc.function.arguments:
-                                acc["arguments"] += tc.function.arguments
-
-                if choice.finish_reason is not None:
-                    finish_reason = choice.finish_reason
+                if event_type == "response.output_item.added":
+                    item = getattr(chunk, "item", None)
+                    if getattr(item, "type", None) == "function_call":
+                        tool_calls_acc[item.id] = {
+                            "id": item.call_id,
+                            "name": item.name,
+                            "arguments": getattr(item, "arguments", "") or "",
+                        }
+                elif event_type == "response.function_call_arguments.delta":
+                    item_id = getattr(chunk, "item_id", None)
+                    if item_id in tool_calls_acc:
+                        tool_calls_acc[item_id]["arguments"] += chunk.delta
+                elif event_type == "response.output_item.done":
+                    item = getattr(chunk, "item", None)
+                    if getattr(item, "type", None) == "function_call":
+                        acc = tool_calls_acc.setdefault(
+                            item.id,
+                            {"id": item.call_id, "name": item.name, "arguments": ""},
+                        )
+                        acc["arguments"] = getattr(item, "arguments", "") or acc["arguments"]
 
             # ─────────────────────────────────────────
             # FINAL ANSWER
