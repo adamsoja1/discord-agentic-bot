@@ -12,6 +12,6 @@ services:
       - LLM_PROVIDER=https://api.openai.com/v1
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLM_TEMPERATURE=0.1
-      - DISCORD_BOT_MODEL=gpt-6-luna
+      - DISCORD_BOT_MODEL=gpt-6-sol
 
     restart: unless-stopped

@@ -11,3 +11,4 @@ langchain-community
 litellm
 openai>=1.66.0
 git+https://github.com/adamsoja1/agentic_sdk.git@main
+
