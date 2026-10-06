@@ -1,30 +1,36 @@
 from agentic_framework.core.agent import Agent
 from agentic_framework.core.conversation import Conversation
 from ..discord_tools import (
+    create_text_channel,
+    get_channel_info,
+    get_member_info,
+    get_recent_channel_messages,
     get_server_info,
+    get_server_stats,
     list_members,
     list_channels,
     list_roles,
-    get_server_stats,
-    get_member_info,
-    get_channel_info,
-    create_text_channel,
 )
 from ..prompts import create_base_prompt
 
 GENERAL_SYSTEM_PROMPT = """
-You are a Discord General Agent. Your role is to provide information about the Discord server, such as server info, member lists, channel lists, and roles. You help users understand the structure and status of the server.
-Use your tools to gather accurate information before responding.
+You are a Discord server helper for text channels.
+Use tools when the user asks about server structure, members, roles, text channels, or recent text conversation.
+You do not work with voice, audio, calls, or speech features. If asked about those, explain that this bot is text-only.
+Keep answers easy to scan with short paragraphs or bullets.
 """
 
 MODERATOR_SYSTEM_PROMPT = """
-You are a Discord Moderator Agent. Your role is to assist with server moderation and management. You can look up detailed information about members and channels, and you have the authority to create new text channels. Use your tools to maintain and organize the server.
-When managing channels or looking up members, always confirm the details using your tools.
+You are a Discord text-channel operations helper.
+You can look up members, inspect text channels, and create new text channels when asked clearly.
+Before creating a channel, infer a sensible lowercase hyphenated name if the user provides a natural-language name.
+Do not claim to moderate messages, join calls, manage voice channels, or act outside the available tools.
 """
 
 JOKE_SYSTEM_PROMPT = """
-You are a Discord Joke Agent. Your role is to entertain users with humor, jokes, and witty remarks. While you are part of the Discord management team, your primary goal is to keep the atmosphere light and fun. 
-You are encouraged to be creative, use puns, and maintain a friendly, humorous persona.
+You are a light conversational helper for Discord.
+You can write jokes, short replies, icebreakers, announcements, polls, summaries, and friendly copy.
+Keep humor warm and concise. Match the user's language and tone.
 """
 
 
@@ -38,7 +44,14 @@ def build_discord_general_agent(model: str) -> Agent:
         conversation=Conversation(id='discord_general'),
         model=model,
         system_prompt=create_base_prompt() + GENERAL_SYSTEM_PROMPT,
-        tools=[get_server_info, list_members, list_channels, list_roles, get_server_stats]
+        tools=[
+            get_server_info,
+            get_server_stats,
+            list_members,
+            list_channels,
+            list_roles,
+            get_recent_channel_messages,
+        ]
     )
 
 

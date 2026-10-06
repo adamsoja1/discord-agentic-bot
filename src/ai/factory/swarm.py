@@ -1,17 +1,13 @@
 
 from __future__ import annotations
 
-import datetime
-import json
 import logging
 import os
-from dataclasses import dataclass, field
-from typing import Any, Callable, AsyncGenerator
+from typing import AsyncGenerator
 
 from agentic_framework.core.conversation import Conversation
 from agentic_framework.core.stream_events import FinalAnswerEvent
 from agentic_framework.core.crew import Crew
-from openai import OpenAI
 from dotenv import load_dotenv
 
 from .entypoint_agent import build_entrypoint_agent
@@ -24,6 +20,7 @@ from .discord_agent import (
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+DEFAULT_MODEL = os.getenv("DISCORD_BOT_MODEL", "gemini-3-flash-preview")
 
 
 async def answer_discord_question(question: str, context: str = "") -> AsyncGenerator:
@@ -32,11 +29,11 @@ async def answer_discord_question(question: str, context: str = "") -> AsyncGene
         yield FinalAnswerEvent(answer="Nie rozumiem pytania. Napisz coś więcej!")
         return
 
-    entrypoint = build_entrypoint_agent(model='gemini-3-flash-preview')
-    discord_general = build_discord_general_agent(model='gemini-3-flash-preview')
-    discord_moderator = build_discord_moderator_agent(model='gemini-3-flash-preview')
-    discord_joke = build_discord_joke_agent(model='gemini-3-flash-preview')
-    websearch_agent = build_websearch_agent(model='gemini-3-flash-preview')
+    entrypoint = build_entrypoint_agent(model=DEFAULT_MODEL)
+    discord_general = build_discord_general_agent(model=DEFAULT_MODEL)
+    discord_moderator = build_discord_moderator_agent(model=DEFAULT_MODEL)
+    discord_joke = build_discord_joke_agent(model=DEFAULT_MODEL)
+    websearch_agent = build_websearch_agent(model=DEFAULT_MODEL)
 
     crew = Crew(
         entrypoint_agent=entrypoint,

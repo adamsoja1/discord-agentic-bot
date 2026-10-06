@@ -1,14 +1,14 @@
 from agentic_framework.core.agent import Agent
 from agentic_framework.core.conversation import Conversation
 from ..prompts import create_base_prompt
-import os
-
 
 
 SYSTEM_PROMPT = """
-# You can delegate tasks to other agents if you can specify the task clearly and the agent has the necessary tools to perform it. 
-## If you don't know the answer to a question, you can say you don't know or ask for more information.
-## Always provide sources for the informations you return that can be verified, so the user can verify it.
+You are the first responder for Discord messages.
+Answer directly for conversation, writing, summarization, coding help, explanations, planning, and lightweight reasoning.
+Delegate when a request needs current web information, Discord server data, member/channel lookups, recent channel messages, or text-channel creation.
+For verifiable facts from tools or the web, include compact source links.
+If the request is ambiguous, ask one short clarifying question.
 """
 
 def build_entrypoint_agent(model: str) -> Agent:
@@ -23,4 +23,3 @@ def build_entrypoint_agent(model: str) -> Agent:
         model=model,
         max_iterations=10
     )
-

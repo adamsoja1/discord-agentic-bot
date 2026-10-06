@@ -9,9 +9,9 @@ services:
       - .env
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - LLM_PROVIDER=ollama
-      - LLM_PROVIDER=https://ollama.com/v1
-      - OPENAI_API_KEY=${OLLAMA_API_KEY}
+      - LLM_PROVIDER=https://api.openai.com/v1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLM_TEMPERATURE=0.1
+      - DISCORD_BOT_MODEL=gpt-6-luna
 
     restart: unless-stopped

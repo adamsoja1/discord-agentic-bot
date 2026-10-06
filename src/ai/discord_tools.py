@@ -1,16 +1,21 @@
-"""Discord server tools for AITIS swarm — plain functions, no CrewAI dependency."""
+"""Text-only Discord server tools for the agentic bot."""
 
 import asyncio
+import re
 from typing import Optional
+
 import discord
 from discord.ext import commands
+
 from agentic_framework.tools.base import tool
+
 # ---------------------------------------------------------------------------
 # Global state (set by bot.py at startup / on each message)
 # ---------------------------------------------------------------------------
 
 _bot_instance: Optional[commands.Bot] = None
 _current_guild_id: Optional[int] = None
+_current_channel_id: Optional[int] = None
 
 
 def set_bot_instance(bot: commands.Bot) -> None:
@@ -23,6 +28,11 @@ def set_current_guild_context(guild_id: int) -> None:
     _current_guild_id = guild_id
 
 
+def set_current_channel_context(channel_id: int) -> None:
+    global _current_channel_id
+    _current_channel_id = channel_id
+
+
 def _get_bot() -> commands.Bot:
     if _bot_instance is None:
         raise RuntimeError("Bot instance not set. Call set_bot_instance() first.")
@@ -31,7 +41,7 @@ def _get_bot() -> commands.Bot:
 
 def _get_guild(guild_id: Optional[int] = None) -> discord.Guild:
     bot = _get_bot()
-    gid = guild_id or _current_guild_id
+    gid = _coerce_discord_id(guild_id) or _current_guild_id
     if gid:
         guild = bot.get_guild(gid)
         if guild:
@@ -39,6 +49,32 @@ def _get_guild(guild_id: Optional[int] = None) -> discord.Guild:
     if not bot.guilds:
         raise RuntimeError("Bot is not in any guilds.")
     return bot.guilds[0]
+
+
+def _coerce_discord_id(value: str | int | None) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, int):
+        return value
+
+    match = re.search(r"\d{15,25}", value)
+    if not match:
+        raise ValueError(f"Expected a Discord ID or mention, got: {value}")
+    return int(match.group(0))
+
+
+def _get_text_channel(channel_id: str | int | None = None) -> discord.TextChannel:
+    guild = _get_guild()
+    cid = _coerce_discord_id(channel_id) or _current_channel_id
+
+    if cid is None:
+        raise RuntimeError("No current text channel is available.")
+
+    channel = guild.get_channel(cid) or _get_bot().get_channel(cid)
+    if not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Only text channels are supported.")
+
+    return channel
 
 
 # ---------------------------------------------------------------------------
@@ -49,15 +85,13 @@ def get_server_info(guild_id: Optional[int] = None) -> str:
     """Get general information about the Discord server."""
     try:
         g = _get_guild(guild_id)
-        text_ch = sum(1 for c in g.channels if isinstance(c, discord.TextChannel))
-        voice_ch = sum(1 for c in g.channels if isinstance(c, discord.VoiceChannel))
         owner = g.owner.name if g.owner else "N/A"
         return (
             f"Server: {g.name} (ID: {g.id})\n"
             f"Owner: {owner}\n"
             f"Members: {g.member_count}\n"
             f"Created: {g.created_at.strftime('%Y-%m-%d')}\n"
-            f"Channels: {len(g.channels)} total ({text_ch} text, {voice_ch} voice)\n"
+            f"Text channels: {len(g.text_channels)}\n"
             f"Roles: {len(g.roles)}\n"
             f"Emojis: {len(g.emojis)}"
         )
@@ -84,18 +118,14 @@ def list_members(guild_id: Optional[int] = None, limit: int = 20) -> str:
 
 @tool
 def list_channels(guild_id: Optional[int] = None) -> str:
-    """List all channels on the Discord server."""
+    """List text channels on the Discord server."""
     try:
         g = _get_guild(guild_id)
-        text_ch = [c for c in g.channels if isinstance(c, discord.TextChannel)]
-        voice_ch = [c for c in g.channels if isinstance(c, discord.VoiceChannel)]
-        lines = [f"Channels in {g.name}:", "  Text:"]
-        for c in text_ch:
-            lines.append(f"    #{c.name} (ID: {c.id})")
-        lines.append("  Voice:")
-        for c in voice_ch:
-            count = sum(1 for m in g.members if m.voice and m.voice.channel == c)
-            lines.append(f"    {c.name} ({count} users) (ID: {c.id})")
+        lines = [f"Text channels in {g.name}:"]
+        for c in g.text_channels:
+            category = f" [{c.category.name}]" if c.category else ""
+            topic = f" - {c.topic}" if c.topic else ""
+            lines.append(f"  #{c.name}{category} (ID: {c.id}){topic}")
         return "\n".join(lines)
     except Exception as e:
         return f"Error listing channels: {e}"
@@ -123,23 +153,21 @@ def get_server_stats(guild_id: Optional[int] = None) -> str:
         dnd    = sum(1 for m in g.members if m.status == discord.Status.dnd)
         offline= sum(1 for m in g.members if m.status == discord.Status.offline)
         bots   = sum(1 for m in g.members if m.bot)
-        voice_users = sum(1 for m in g.members if m.voice)
         return (
             f"Stats for {g.name}:\n"
             f"  Total members: {g.member_count} ({g.member_count - bots} humans, {bots} bots)\n"
             f"  Online: {online} | Idle: {idle} | DnD: {dnd} | Offline: {offline}\n"
-            f"  In voice channels: {voice_users}\n"
-            f"  Channels: {len(g.channels)} | Roles: {len(g.roles)} | Emojis: {len(g.emojis)}"
+            f"  Text channels: {len(g.text_channels)} | Roles: {len(g.roles)} | Emojis: {len(g.emojis)}"
         )
     except Exception as e:
         return f"Error getting server stats: {e}"
 
 @tool
 def get_member_info(member_id: str, guild_id: Optional[int] = None) -> str:
-    """Get information about a specific Discord member by their user ID."""
+    """Get information about a specific Discord member by user ID or mention."""
     try:
         g = _get_guild(guild_id)
-        member = g.get_member(int(member_id))
+        member = g.get_member(_coerce_discord_id(member_id))
         if not member:
             return f"Member with ID {member_id} not found on this server."
         roles = ", ".join(r.name for r in member.roles[1:]) or "None"
@@ -156,10 +184,10 @@ def get_member_info(member_id: str, guild_id: Optional[int] = None) -> str:
 
 @tool
 def get_channel_info(channel_id: str, guild_id: Optional[int] = None) -> str:
-    """Get information about a specific Discord channel by its ID."""
+    """Get information about a specific text channel by ID or mention."""
     try:
         g = _get_guild(guild_id)
-        channel = g.get_channel(int(channel_id))
+        channel = g.get_channel(_coerce_discord_id(channel_id))
         if not channel:
             return f"Channel with ID {channel_id} not found."
         if isinstance(channel, discord.TextChannel):
@@ -170,16 +198,7 @@ def get_channel_info(channel_id: str, guild_id: Optional[int] = None) -> str:
                 f"  NSFW: {channel.is_nsfw()}\n"
                 f"  Created: {channel.created_at.strftime('%Y-%m-%d')}"
             )
-        elif isinstance(channel, discord.VoiceChannel):
-            users = sum(1 for m in g.members if m.voice and m.voice.channel == channel)
-            return (
-                f"Voice channel: {channel.name} (ID: {channel.id})\n"
-                f"  Users currently in channel: {users}\n"
-                f"  Bitrate: {channel.bitrate // 1000} kbps\n"
-                f"  User limit: {channel.user_limit or 'unlimited'}\n"
-                f"  Created: {channel.created_at.strftime('%Y-%m-%d')}"
-            )
-        return f"Channel type not supported: {type(channel).__name__}"
+        return f"Only text channels are supported. Got: {type(channel).__name__}"
     except Exception as e:
         return f"Error getting channel info: {e}"
 
@@ -192,7 +211,7 @@ def create_text_channel(name: str, category_id: Optional[int] = None) -> str:
         g = _get_guild()
 
         async def _create():
-            category = g.get_channel(category_id) if category_id else None
+            category = g.get_channel(_coerce_discord_id(category_id)) if category_id else None
             channel = await g.create_text_channel(name=name, category=category)
             return f"Created text channel: #{channel.name} (ID: {channel.id})"
 
@@ -200,3 +219,29 @@ def create_text_channel(name: str, category_id: Optional[int] = None) -> str:
         return future.result(timeout=10)
     except Exception as e:
         return f"Error creating channel: {e}"
+
+
+@tool
+def get_recent_channel_messages(channel_id: Optional[str] = None, limit: int = 20) -> str:
+    """Read recent messages from the current or specified text channel."""
+    try:
+        bot = _get_bot()
+        channel = _get_text_channel(channel_id)
+        limit = max(1, min(int(limit), 50))
+
+        async def _read_messages():
+            lines: list[str] = []
+            async for message in channel.history(limit=limit):
+                if message.author.bot or not message.content.strip():
+                    continue
+                created = message.created_at.strftime("%Y-%m-%d %H:%M")
+                lines.insert(0, f"[{created}] {message.author.display_name}: {message.content.strip()}")
+            return lines
+
+        future = asyncio.run_coroutine_threadsafe(_read_messages(), bot.loop)
+        lines = future.result(timeout=10)
+        if not lines:
+            return f"No recent text messages found in #{channel.name}."
+        return f"Recent text messages in #{channel.name}:\n" + "\n".join(lines)
+    except Exception as e:
+        return f"Error reading recent messages: {e}"
