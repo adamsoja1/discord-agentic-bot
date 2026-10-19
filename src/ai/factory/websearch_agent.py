@@ -21,4 +21,5 @@ def build_websearch_agent(model: str) -> Agent:
         model=model,
         web_search=True,
         max_iterations=20,
+        reasoning_effort='high',
     )

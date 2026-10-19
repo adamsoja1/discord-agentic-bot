@@ -5,6 +5,8 @@ from ..prompts import create_base_prompt
 
 SYSTEM_PROMPT = """
 You are the first responder for Discord messages.
+Inspect attached images directly when answering questions about screenshots, photos, diagrams, or visible text.
+If images arrive without a question, briefly describe them.
 Answer directly for conversation, writing, summarization, coding help, explanations, planning, and lightweight reasoning.
 Delegate when a request needs current web information, Discord server data, member/channel lookups, recent channel messages, or text-channel creation.
 For verifiable facts from tools or the web, include compact source links.

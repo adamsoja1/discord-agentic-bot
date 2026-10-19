@@ -5,7 +5,7 @@ import logging
 import os
 from typing import AsyncGenerator
 
-from agentic_framework.core.conversation import Conversation
+from agentic_framework.core.conversation import Conversation, ImageInputs
 from agentic_framework.core.stream_events import FinalAnswerEvent
 from agentic_framework.core.crew import Crew
 from dotenv import load_dotenv
@@ -23,11 +23,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("DISCORD_BOT_MODEL", "gemini-3-flash-preview")
 
 
-async def answer_discord_question(question: str, context: str = "") -> AsyncGenerator:
+async def answer_discord_question(question: str, context: str = "", *, images: ImageInputs = ()) -> AsyncGenerator:
     question = question.strip()
-    if not question:
-        yield FinalAnswerEvent(answer="Nie rozumiem pytania. Napisz coś więcej!")
+    if not question and not images:
+        yield FinalAnswerEvent(agent_name="ZIOMAL", answer="Nie rozumiem pytania. Napisz coś więcej!")
         return
+
+    if not question:
+        question = "Describe the attached images."
 
     entrypoint = build_entrypoint_agent(model=DEFAULT_MODEL)
     discord_general = build_discord_general_agent(model=DEFAULT_MODEL)
@@ -57,5 +60,5 @@ async def answer_discord_question(question: str, context: str = "") -> AsyncGene
             + user_content
         )
 
-    async for event in crew.invoke(user_content):  # crew.invoke must be async gen
+    async for event in crew.invoke(user_content, images=images):  # crew.invoke must be async gen
         yield event

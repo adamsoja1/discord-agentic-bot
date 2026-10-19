@@ -15,6 +15,7 @@ from agentic_framework.core.stream_events import (
     ToolCallStartEvent,
     ToolResultEvent,
 )
+from .images import collect_image_inputs
 from ..ai import discord_tools
 from ..ai.factory.swarm import answer_discord_question
 
@@ -131,6 +132,7 @@ def _status_for_event(event: object) -> str | None:
 
 
 async def _send_ai_response(message: discord.Message, question: str) -> None:
+    images = collect_image_inputs(message.attachments)
     reply = await message.reply(
         content="Thinking...",
         mention_author=False,
@@ -140,7 +142,7 @@ async def _send_ai_response(message: discord.Message, question: str) -> None:
     answer: str | None = None
     context = await _collect_recent_context(message)
 
-    async for event in answer_discord_question(question=question, context=context):
+    async for event in answer_discord_question(question=question, context=context, images=images):
         if isinstance(event, FinalAnswerEvent):
             answer = event.answer
             continue
@@ -205,12 +207,12 @@ async def on_message(message: discord.Message):
 @bot.command(name="ask")
 async def ask_command(ctx: commands.Context, *, question: str = ""):
     """Ask the bot without mentioning it."""
-    if question.strip():
+    if question.strip() or collect_image_inputs(ctx.message.attachments):
         await _send_ai_response(ctx.message, question.strip())
         return
 
     await ctx.reply(
-        "Usage: `!ask your question`",
+        "Usage: `!ask your question` (optionally attach images), or `!ask` with an image.",
         mention_author=False,
         allowed_mentions=discord.AllowedMentions.none(),
     )
@@ -218,14 +220,15 @@ async def ask_command(ctx: commands.Context, *, question: str = ""):
 
 @bot.command(name="help")
 async def help_command(ctx: commands.Context):
-    """Show text-only usage help."""
+    """Show usage help."""
     await ctx.reply(
         "\n".join(
             [
-                "Text bot commands:",
+                "Bot commands:",
                 "`@bot your question` - ask in a server channel.",
                 "`!ask your question` - ask without mentioning the bot.",
                 "DM the bot - ask privately.",
+                "Attach PNG, JPEG, WEBP, or GIF images to your question, or send an image alone. In server channels, mention the bot or use !ask.",
                 "",
                 "I can help with server info, text-channel organization, web research, code questions, summaries, drafts, and light conversation.",
             ]
